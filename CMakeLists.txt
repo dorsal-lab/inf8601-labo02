@@ -113,3 +113,5 @@ add_custom_target(check
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 )
 add_dependencies(check sinoscope)
+
+install(TARGETS sinoscope)
