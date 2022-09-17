@@ -113,3 +113,5 @@ add_custom_target(check
 add_dependencies(check sinoscope)
 
 install(TARGETS sinoscope)
+install(DIRECTORY source/kernel/ DESTINATION share/cl/sinoscope
+        FILES_MATCHING PATTERN "*.cl")
