@@ -94,11 +94,9 @@ add_custom_target(format
 )
 
 add_custom_target(remise
-    COMMAND zip --must-match -r ${CMAKE_CURRENT_BINARY_DIR}/remise.zip
-            source/*.c source/kernel/*.cl include/*.h CMakeLists.txt .clang-format README.pdf
+    COMMAND tar -zcvf remise.tar.gz source/sinoscope-openmp.c source/sinoscope-opencl.c source/kernel/sinoscope.cl
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
 )
-add_dependencies(remise sinoscope)
 
 add_custom_target(handout
     COMMAND asciidoctor-pdf README.asc
