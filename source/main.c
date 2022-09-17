@@ -292,8 +292,12 @@ int main(int argc, char* argv[]) {
 
     sinoscope_t* sinoscope = NULL;
     sinoscope_opencl_t sinoscope_opencl;
-    sinoscope_opencl_t* sinoscope_opencl_ptr =
-        configure_opencl(opencl_platform_index, opencl_device_index, &sinoscope_opencl, width, height);
+    sinoscope_opencl_t* sinoscope_opencl_ptr;
+
+    if (use_method_opencl || do_benchmark) {
+	    sinoscope_opencl_ptr =
+		    configure_opencl(opencl_platform_index, opencl_device_index, &sinoscope_opencl, width, height);
+    }
 
     if (do_benchmark) {
         run_benchmark(sinoscope_opencl_ptr, width, height, taylor, 200.0, iterations);
