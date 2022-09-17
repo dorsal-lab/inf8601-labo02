@@ -175,6 +175,7 @@ fail_exit:
 }
 
 int main(int argc, char* argv[]) {
+
     if (getenv("DISPLAY") != NULL) {
         glutInit(&argc, argv);
     }

@@ -82,9 +82,11 @@ else()
     message(FATAL_ERROR "libpng is required for building the application")
 endif()
 
+set(OpenCLRoot ${PROJECT_SOURCE_DIR}/source/kernel)
+
 set_source_files_properties(source/sinoscope-openmp.c PROPERTIES COMPILE_FLAGS -fopenmp)
-add_definitions(-D__KERNEL_FILE__="${PROJECT_SOURCE_DIR}/source/kernel/sinoscope.cl")
-add_definitions(-D__OPENCL_INCLUDE__="${PROJECT_SOURCE_DIR}/source/kernel")
+add_definitions(-D__KERNEL_FILE__="${OpenCLRoot}/sinoscope.cl")
+add_definitions(-D__OPENCL_INCLUDE__="${OpenCLRoot}")
 add_definitions(-DCL_TARGET_OPENCL_VERSION=220)
 
 add_custom_target(format
