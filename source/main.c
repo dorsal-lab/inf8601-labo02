@@ -6,13 +6,24 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef WITH_VIEWER
 #include <GL/glut.h>
+#endif
 
 #include "headless.h"
 #include "log.h"
 #include "opencl.h"
 #include "sinoscope.h"
 #include "viewer.h"
+
+__attribute__((weak)) int viewer_init(sinoscope_t* sinoscope) {
+    return 0;
+}
+
+__attribute__((weak)) int viewer_open() {
+    return 0;
+}
+__attribute__((weak)) void viewer_destroy() {}
 
 static void show_help(FILE* f, const char* exec_name) {
     fprintf(f, "Usage: %s [OPTION]...\n", exec_name);
@@ -42,8 +53,7 @@ static void show_help(FILE* f, const char* exec_name) {
     fprintf(f,
             "  --headless                      run the computation without "
             "graphical interface\n");
-    fprintf(f,
-            "  --save FILE                     save a frame into a PNG image\n");
+    fprintf(f, "  --save FILE                     save a frame into a PNG image\n");
     fprintf(f, "  --benchmark N                   benchmark all implementations for N iterations\n");
     fprintf(f, "  --check                         check openmp and opencl outputs\n");
     fprintf(f, "  --help                          show this help\n");
@@ -175,10 +185,11 @@ fail_exit:
 }
 
 int main(int argc, char* argv[]) {
-
+#ifdef WITH_VIEWER
     if (getenv("DISPLAY") != NULL) {
         glutInit(&argc, argv);
     }
+#endif
 
     char* exec_name        = argv[0];
     bool use_method_serial = false;
@@ -296,7 +307,7 @@ int main(int argc, char* argv[]) {
     sinoscope_opencl_t* sinoscope_opencl_ptr;
 
     sinoscope_opencl_ptr =
-	    configure_opencl(opencl_platform_index, opencl_device_index, &sinoscope_opencl, width, height);
+        configure_opencl(opencl_platform_index, opencl_device_index, &sinoscope_opencl, width, height);
 
     if (do_benchmark) {
         run_benchmark(sinoscope_opencl_ptr, width, height, taylor, 200.0, iterations);
