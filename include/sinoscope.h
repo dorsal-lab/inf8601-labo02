@@ -6,6 +6,7 @@
 #include "opencl.h"
 
 typedef struct sinoscope_opencl {
+    cl_device_id device_id;
     cl_context context;
     cl_command_queue queue;
     cl_mem buffer;
