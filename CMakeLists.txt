@@ -19,18 +19,45 @@ target_sources(sinoscope PUBLIC
     source/opencl.c
     source/sinoscope.c
     source/sinoscope-serial.c
-    source/sinoscope-opencl.c
     source/sinoscope-openmp.c
+    source/sinoscope-opencl.c
+)
+
+add_executable(sinoscope-nocl)
+target_link_libraries(sinoscope-nocl -lm -lpthread)
+target_sources(sinoscope-nocl PUBLIC
+    source/color.c
+    source/headless.c
+    source/image.c
+    source/main.c
+    source/sinoscope.c
+    source/sinoscope-serial.c
+    source/sinoscope-openmp.c
+)
+
+add_executable(sinoscope-nomp)
+target_link_libraries(sinoscope-nomp -lm -lpthread)
+target_sources(sinoscope-nomp PUBLIC
+    source/color.c
+    source/headless.c
+    source/image.c
+    source/main.c
+    source/opencl.c
+    source/sinoscope.c
+    source/sinoscope-serial.c
+    source/sinoscope-opencl.c
 )
 
 include(FindOpenMP)
 if(OpenMP_C_FOUND)
+    target_link_libraries(sinoscope-nocl ${OpenMP_C_LIBRARIES})
     target_link_libraries(sinoscope ${OpenMP_C_LIBRARIES})
 else()
     message(FATAL_ERROR "openmp is required for building the application")
 endif()
 
 if (DEFINED ROCM)
+  target_link_libraries(sinoscope-nomp ${ROCM}/lib/libamdocl64.so)
   target_link_libraries(sinoscope ${ROCM}/lib/libamdocl64.so)
 else()
   add_definitions(-DWITH_VIEWER)
@@ -42,6 +69,8 @@ else()
 
       target_link_libraries(sinoscope ${OPENGL_LIBRARIES})
       target_include_directories(sinoscope PUBLIC ${OPENGL_INCLUDE_DIR})
+      target_link_libraries(sinoscope-nomp ${OPENGL_LIBRARIES})
+      target_include_directories(sinoscope-nomp PUBLIC ${OPENGL_INCLUDE_DIR})
   else()
       message(FATAL_ERROR "opengl is required for building the application")
   endif()
@@ -67,6 +96,10 @@ include(FindPNG)
 if(PNG_FOUND)
     target_link_libraries(sinoscope ${PNG_LIBRARIES})
     target_include_directories(sinoscope PUBLIC ${PNG_INCLUDE_DIRS})
+    target_link_libraries(sinoscope-nocl ${PNG_LIBRARIES})
+    target_include_directories(sinoscope-nocl PUBLIC ${PNG_INCLUDE_DIRS})
+    target_link_libraries(sinoscope-nomp ${PNG_LIBRARIES})
+    target_include_directories(sinoscope-nomp PUBLIC ${PNG_INCLUDE_DIRS})
 else()
     message(FATAL_ERROR "libpng is required for building the application")
 endif()
@@ -89,20 +122,13 @@ add_custom_target(remise
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
 )
 
-add_custom_target(handout
-    COMMAND asciidoctor-pdf README.asc
-    COMMAND zip --must-match -r ${CMAKE_CURRENT_BINARY_DIR}/handout.zip
-            source/*.c source/kernel/*.cl include/*.h CMakeLists.txt .clang-format .gitignore README.pdf
-    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
-)
-add_dependencies(handout sinoscope)
-
 add_custom_target(check
-    COMMAND ./sinoscope --check
+    COMMAND ./sinoscope --check cl
+    COMMAND ./sinoscope --check mp
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 )
-add_dependencies(check sinoscope)
+add_dependencies(check sinoscope-nocl sinoscope-nomp)
 
-install(TARGETS sinoscope)
+install(TARGETS sinoscope-nocl sinoscope-nomp)
 install(DIRECTORY source/kernel/ DESTINATION share/cl/sinoscope
         FILES_MATCHING PATTERN "*.cl")

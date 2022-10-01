@@ -16,6 +16,14 @@
 #include "sinoscope.h"
 #include "viewer.h"
 
+__attribute__((weak))
+char* opencl_kernel_path;
+
+__attribute__((weak))
+int sinoscope_image_openmp(sinoscope_t* sinoscope) {
+	return -1;
+}
+
 __attribute__((weak)) int viewer_init(sinoscope_t* sinoscope) {
     return 0;
 }
@@ -23,7 +31,51 @@ __attribute__((weak)) int viewer_init(sinoscope_t* sinoscope) {
 __attribute__((weak)) int viewer_open() {
     return 0;
 }
-__attribute__((weak)) void viewer_destroy() {}
+
+__attribute__((weak)) void viewer_destroy() {
+
+}
+
+__attribute__((weak))
+int sinoscope_opencl_init(sinoscope_opencl_t* opencl, cl_device_id opencl_device_id, unsigned int width,
+			  unsigned int height) {
+	return 0;
+}
+
+__attribute__((weak))
+void sinoscope_opencl_cleanup(sinoscope_opencl_t* opencl)
+{
+
+}
+
+__attribute__((weak))
+int sinoscope_image_opencl(sinoscope_t* sinoscope) {
+	return 0;
+}
+
+__attribute__((weak))
+int opencl_load_kernel_code(char** code, size_t* len)
+{
+	return 0;
+}
+
+__attribute__((weak))
+int opencl_get_device_id(unsigned int platform_index, unsigned int device_index, cl_device_id* context_device_id)
+{
+	return 0;
+}
+
+__attribute__((weak))
+int opencl_print_device_info(cl_device_id device_id)
+{
+	return 0;
+}
+
+__attribute__((weak))
+int opencl_print_build_log(cl_program program, cl_device_id device_id)
+{
+	return 0;
+}
 
 static void show_help(FILE* f, const char* exec_name) {
     fprintf(f, "Usage: %s [OPTION]...\n", exec_name);
@@ -54,8 +106,9 @@ static void show_help(FILE* f, const char* exec_name) {
             "  --headless                      run the computation without "
             "graphical interface\n");
     fprintf(f, "  --save FILE                     save a frame into a PNG image\n");
-    fprintf(f, "  --benchmark N                   benchmark all implementations for N iterations\n");
-    fprintf(f, "  --check                         check openmp and opencl outputs\n");
+    fprintf(f, "  --benchmarks N                  benchmark all implementations for N iterations\n");
+    fprintf(f, "  --benchmark VARIANT N           benchmark VARIANT for N iterations\n");
+    fprintf(f, "  --check VARIANT                 check VARIANT outputs\n");
     fprintf(f, "  --help                          show this help\n");
 }
 
@@ -129,16 +182,75 @@ static void run_headless(sinoscope_t* sinoscope) {
     }
 }
 
-static void run_benchmark(sinoscope_opencl_t* opencl, unsigned int width, unsigned int height, unsigned int taylor,
-                          float max, unsigned int iterations) {
-    if (sinoscope_benchmark(width, height, taylor, max, opencl, iterations) < 0) {
+static void run_benchmark_serial(unsigned int width, unsigned int height, unsigned int taylor,
+				 float max, unsigned int iterations) {
+
+	sinoscope_t *s = sinoscope_create("serial", sinoscope_image_serial, width, height, max);
+
+	if (!s) {
+		LOG_ERROR("failed to create sinoscope (serial)");
+		exit(1);
+	}
+	s->taylor = taylor;
+	if (sinoscope_benchmark(s, iterations) < 0) {
         LOG_ERROR("failed to check ouputs");
         exit(1);
     }
 }
 
-static void run_check(sinoscope_opencl_t* opencl, unsigned int width, unsigned int height, unsigned int taylor,
-                      float max) {
+static void run_benchmark_mp(unsigned int width, unsigned int height, unsigned int taylor,
+			     float max, unsigned int iterations) {
+
+		sinoscope_t *s = sinoscope_create("openmp", sinoscope_image_openmp, width, height, max);
+
+	if (!s) {
+		LOG_ERROR("failed to create sinoscope (openmp)");
+		exit(1);
+	}
+
+	s->taylor = taylor;
+
+	if (sinoscope_benchmark(s, iterations) < 0) {
+        LOG_ERROR("failed to check ouputs");
+        exit(1);
+    }
+}
+
+static void run_benchmark_cl(sinoscope_opencl_t* opencl, unsigned int width, unsigned int height, unsigned int taylor,
+			     float max, unsigned int iterations) {
+	sinoscope_t *s = sinoscope_create("opencl", sinoscope_image_opencl, width, height, max);
+
+	if (!s) {
+		LOG_ERROR("failed to create sinoscope (serial)");
+		exit(1);
+	}
+	s->taylor = taylor;
+	s->opencl = opencl;
+	if (sinoscope_benchmark(s, iterations) < 0) {
+        LOG_ERROR("failed to check ouputs");
+        exit(1);
+    }
+}
+
+static void run_benchmarks(sinoscope_opencl_t* opencl, unsigned int width, unsigned int height, unsigned int taylor,
+                          float max, unsigned int iterations) {
+    if (sinoscope_benchmarks(width, height, taylor, max, opencl, iterations) < 0) {
+        LOG_ERROR("failed to check ouputs");
+        exit(1);
+    }
+}
+
+static void run_check_mp(unsigned int width, unsigned int height, unsigned int taylor,
+			 float max) {
+    if (sinoscope_check(width, height, taylor, max, NULL) < 0) {
+        LOG_ERROR("failed to check ouputs");
+        exit(1);
+    }
+}
+
+
+static void run_check_cl(sinoscope_opencl_t* opencl, unsigned int width, unsigned int height, unsigned int taylor,
+			 float max) {
     if (sinoscope_check(width, height, taylor, max, opencl) < 0) {
         LOG_ERROR("failed to check ouputs");
         exit(1);
@@ -197,9 +309,10 @@ int main(int argc, char* argv[]) {
     bool use_method_opencl = false;
     int use_method_count   = 0;
     bool do_run_headless   = false;
-    bool do_benchmark      = false;
-    bool do_check          = false;
+    bool do_benchmarks      = false;
     bool do_save_image     = false;
+    char *check            = NULL;
+    char *benchmark        = NULL;
 
     char* save_filename = NULL;
 
@@ -283,7 +396,7 @@ int main(int argc, char* argv[]) {
             do_save_image = true;
             save_filename = argv[i + 1];
             i++;
-        } else if (strcmp("--benchmark", argv[i]) == 0) {
+        } else if (strcmp("--benchmarks", argv[i]) == 0) {
             if (i >= argc - 1) {
                 fail_missing_argument(exec_name, argv[i]);
             }
@@ -291,9 +404,24 @@ int main(int argc, char* argv[]) {
             iterations = get_strictly_positive_integer_or_fail(exec_name, argv[i], argv[i + 1]);
             i++;
 
-            do_benchmark = true;
+            do_benchmarks = true;
+
+	} else if (strcmp("--benchmark", argv[i]) == 0) {
+            if (i >= argc - 2) {
+                fail_missing_argument(exec_name, argv[i]);
+            }
+
+	    benchmark = argv[++i];
+
+            iterations = get_strictly_positive_integer_or_fail(exec_name, argv[i], argv[i + 1]);
+            i++;
+
         } else if (strcmp("--check", argv[i]) == 0) {
-            do_check = true;
+		if (i >= argc - 1) {
+			fail_missing_argument(exec_name, argv[i]);
+		}
+		check = argv[i + 1];
+		i++;
         } else if (strcmp("--help", argv[i]) == 0) {
             show_help(stdout, exec_name);
             exit(0);
@@ -304,19 +432,50 @@ int main(int argc, char* argv[]) {
 
     sinoscope_t* sinoscope = NULL;
     sinoscope_opencl_t sinoscope_opencl;
-    sinoscope_opencl_t* sinoscope_opencl_ptr;
+    sinoscope_opencl_t* sinoscope_opencl_ptr = NULL;
 
-    sinoscope_opencl_ptr =
+    if (do_benchmarks) {
+	    sinoscope_opencl_ptr =
         configure_opencl(opencl_platform_index, opencl_device_index, &sinoscope_opencl, width, height);
 
-    if (do_benchmark) {
-        run_benchmark(sinoscope_opencl_ptr, width, height, taylor, 200.0, iterations);
+        run_benchmarks(sinoscope_opencl_ptr, width, height, taylor, 200.0, iterations);
         goto done;
     }
 
-    if (do_check) {
-        run_check(sinoscope_opencl_ptr, width, height, taylor, 200.0);
-        goto done;
+    if (benchmark)  {
+
+	    if (0 == strcmp(benchmark, "serial")) {
+		    run_benchmark_serial(width, height, taylor, 200.0, iterations);
+	    } else if (0 == strcmp(benchmark, "mp")) {
+		    run_benchmark_mp(width, height, taylor, 200.0, iterations);
+	    } else if(0 == strcmp(benchmark, "cl")) {
+		    	    sinoscope_opencl_ptr =
+		    configure_opencl(opencl_platform_index, opencl_device_index, &sinoscope_opencl, width, height);
+
+			    run_benchmark_cl(sinoscope_opencl_ptr, width, height, taylor, 200.0, iterations);
+	    } else {
+		    fprintf(stderr, "Invalid benchmark: %s\n", check);
+		    exit(EXIT_FAILURE);
+	    }
+
+	    goto done;
+    }
+
+    if (check) {
+
+	    if (0 == strcmp(check, "mp")) {
+		    run_check_mp(width, height, taylor, 200.0);
+	    } else if(0 == strcmp(check, "cl")) {
+		    	    sinoscope_opencl_ptr =
+		    configure_opencl(opencl_platform_index, opencl_device_index, &sinoscope_opencl, width, height);
+
+		    run_check_cl(sinoscope_opencl_ptr, width, height, taylor, 200.0);
+	    } else {
+		    fprintf(stderr, "Invalid check: %s\n", check);
+		    exit(EXIT_FAILURE);
+	    }
+
+	    goto done;
     }
 
     if (use_method_count == 0) {
@@ -330,6 +489,9 @@ int main(int argc, char* argv[]) {
     } else if (use_method_openmp) {
         sinoscope = sinoscope_create("openmp", sinoscope_image_openmp, width, height, 200.0);
     } else if (use_method_opencl) {
+	    sinoscope_opencl_ptr =
+		    configure_opencl(opencl_platform_index, opencl_device_index, &sinoscope_opencl, width, height);
+
         sinoscope = sinoscope_create("opencl", sinoscope_image_opencl, width, height, 200.0);
     } else {
         LOG_ERROR("no method defined");

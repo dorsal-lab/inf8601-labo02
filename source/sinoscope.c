@@ -100,41 +100,50 @@ fail_exit:
 
 static int compare_methods(sinoscope_t* serial, sinoscope_t* openmp, sinoscope_t* opencl) {
     int status;
+    sinoscope_t *base;
+    sinoscope_t *compare;
+    long long max_diff;
 
-    if (serial->buffer_size != openmp->buffer_size || serial->buffer_size != opencl->buffer_size) {
+    base = serial;
+
+    if (openmp) {
+	    max_diff = 0;
+	    compare  = openmp;
+    } else {
+	    compare  = opencl;
+	    max_diff = 10;
+    }
+
+    if (base->buffer_size != compare->buffer_size) {
         LOG_ERROR("buffer sizes mismatch");
         goto fail_exit;
     }
 
-    unsigned int buffer_size = serial->buffer_size;
+    unsigned int buffer_size = base->buffer_size;
 
-    status = sinoscope_corners(serial);
-    status += sinoscope_corners(openmp);
-    status += sinoscope_corners(opencl);
+    status = sinoscope_corners(base);
+    status += sinoscope_corners(compare);
+
     if (status != 0) {
         LOG_ERROR("failed to forward sinoscope");
         goto fail_exit;
     }
 
-    status = serial->handler(serial);
-    status += openmp->handler(openmp);
-    status += opencl->handler(opencl);
+    status = base->handler(serial);
+    status += compare->handler(compare);
+
     if (status != 0) {
         LOG_ERROR("failed to call sinoscope handler");
         goto fail_exit;
     }
 
     for (int i = 0; i < buffer_size; i++) {
-        int serial_value = serial->buffer[i];
-        int openmp_value = openmp->buffer[i];
-        int opencl_value = opencl->buffer[i];
+        int base_value = base->buffer[i];
+        int compare_value = compare->buffer[i];
 
-        if (abs(openmp_value - serial_value) > 0) {
-            printf("openmp [%d] differs from serial [%d] at %d\n", openmp_value, serial_value, i);
-        }
-
-        if (abs(opencl_value - serial_value) > 10) {
-            printf("opencl [%d] differs from serial [%d] at %d\n", opencl_value, serial_value, i);
+        if (abs(compare_value - base_value) > max_diff) {
+            printf("[%d] differs from [%d] at %d\n", compare_value, base_value, i);
+	    exit(EXIT_FAILURE);
         }
     }
 
@@ -157,13 +166,14 @@ int sinoscope_check(unsigned int width, unsigned int height, unsigned int taylor
     }
     sinoscope_serial->taylor = taylor;
 
+    if (!opencl) {
     sinoscope_openmp = sinoscope_create("openmp", sinoscope_image_openmp, width, height, max);
     if (sinoscope_openmp == NULL) {
         LOG_ERROR("failed to create sinoscope (openmp)");
         goto fail_exit;
     }
     sinoscope_openmp->taylor = taylor;
-
+    } else {
     sinoscope_opencl = sinoscope_create("opencl", sinoscope_image_opencl, width, height, max);
     if (sinoscope_opencl == NULL) {
         LOG_ERROR("failed to create sinoscope (opencl)");
@@ -171,12 +181,16 @@ int sinoscope_check(unsigned int width, unsigned int height, unsigned int taylor
     }
     sinoscope_opencl->taylor = taylor;
     sinoscope_opencl->opencl = opencl;
+    }
 
     for (int i = 0; i < 10; i++) {
         float time             = (((float)rand()) / ((float)RAND_MAX)) * (2 * M_PI * 1000);
         sinoscope_serial->time = time;
-        sinoscope_openmp->time = time;
-        sinoscope_opencl->time = time;
+	if (!opencl) {
+		sinoscope_openmp->time = time;
+	} else {
+		sinoscope_opencl->time = time;
+	}
 
         if (compare_methods(sinoscope_serial, sinoscope_openmp, sinoscope_opencl) < 0) {
             LOG_ERROR("error when comparing results");
@@ -185,8 +199,12 @@ int sinoscope_check(unsigned int width, unsigned int height, unsigned int taylor
     }
 
     sinoscope_destroy(sinoscope_serial);
+
+    if (!opencl) {
     sinoscope_destroy(sinoscope_openmp);
+    } else {
     sinoscope_destroy(sinoscope_opencl);
+    }
 
     return 0;
 
@@ -220,7 +238,7 @@ static uint64_t timeval_diff_us(timeval_t* t1, timeval_t* t2) {
     return (t1_us > t2_us) ? (t1_us - t2_us) : (t2_us - t1_us);
 }
 
-static int benchmark(sinoscope_t* sinoscope, unsigned int iterations) {
+int sinoscope_benchmark(sinoscope_t* sinoscope, unsigned int iterations) {
     timespec_t start_time;
     if (clock_gettime(CLOCK_MONOTONIC, &start_time) < 0) {
         LOG_ERROR_ERRNO("clock_gettime");
@@ -270,7 +288,7 @@ fail_exit:
     return -1;
 }
 
-int sinoscope_benchmark(unsigned int width, unsigned int height, unsigned int taylor, float max,
+int sinoscope_benchmarks(unsigned int width, unsigned int height, unsigned int taylor, float max,
                         sinoscope_opencl_t* opencl, unsigned int iterations) {
     sinoscope_t* sinoscope_serial = NULL;
     sinoscope_t* sinoscope_openmp = NULL;
@@ -303,17 +321,17 @@ int sinoscope_benchmark(unsigned int width, unsigned int height, unsigned int ta
     printf("=========================================================================\n");
     printf("test    width   height  iterations   user (us)  system (us)  elapsed (us)\n");
 
-    if (benchmark(sinoscope_serial, iterations) < 0) {
+    if (sinoscope_benchmark(sinoscope_serial, iterations) < 0) {
         LOG_ERROR("failed to benchmark (serial)");
         goto fail_exit;
     }
 
-    if (benchmark(sinoscope_openmp, iterations) < 0) {
+    if (sinoscope_benchmark(sinoscope_openmp, iterations) < 0) {
         LOG_ERROR("failed to benchmark (openmp)");
         goto fail_exit;
     }
 
-    if (benchmark(sinoscope_opencl, iterations) < 0) {
+    if (sinoscope_benchmark(sinoscope_opencl, iterations) < 0) {
         LOG_ERROR("failed to benchmark (opencl)");
         goto fail_exit;
     }
