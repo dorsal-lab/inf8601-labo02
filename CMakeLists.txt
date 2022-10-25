@@ -1,5 +1,8 @@
 cmake_minimum_required(VERSION 3.13.5)
-project(tp2 LANGUAGES C)
+project(tp2 LANGUAGES C CXX)
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_FLAGS "-fno-rtti")
 
 set(CMAKE_C_FLAGS "${CMAKE_CFLAGS} -g -Wall")
 set(CMAKE_C_FLAGS_RELEASE "${CMAKE_CFLAGS_RELEASE} -O2")
@@ -140,6 +143,44 @@ set_source_files_properties(source/sinoscope-openmp.c PROPERTIES COMPILE_FLAGS -
 add_definitions(-D__KERNEL_FILE__="${OpenCLRoot}/sinoscope.cl")
 add_definitions(-D__OPENCL_INCLUDE__="${OpenCLRoot}")
 add_definitions(-DCL_TARGET_OPENCL_VERSION=220)
+
+if(DEFINED CLANG_INCLUDE_DIR)
+
+add_executable(
+    source-checker
+    source/matcher/main.cpp
+    source/matcher/file_search.cpp
+    source/matcher/matchers.cpp
+)
+
+target_link_libraries(source-checker
+    clangTooling
+    clangFrontend
+    clangSerialization
+    clangDriver
+    clangRewriteFrontend
+    clangRewrite
+    clangParse
+    clangSema
+    clangAnalysis
+    clangAST
+    clangASTMatchers
+    clangEdit
+    clangLex
+    clangBasic
+    LLVMSupport
+    LLVMFrontendOpenMP
+)
+
+add_custom_target(check-source
+  COMMAND ${CMAKE_CURRENT_BINARY_DIR}/source-checker
+  -d ${CMAKE_CURRENT_SOURCE_DIR}
+  -v ${VARIANT}
+  2> /dev/null
+)
+add_dependencies(check-source source-checker)
+
+endif()
 
 add_custom_target(format
     COMMAND clang-format -i --verbose `find source -type f -iname '*.cl'`
