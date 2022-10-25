@@ -52,7 +52,7 @@ include(FindOpenMP)
 if(OpenMP_C_FOUND)
     target_link_libraries(sinoscope ${OpenMP_C_LIBRARIES})
     target_link_libraries(sinoscope-nocl ${OpenMP_C_LIBRARIES})
-else()p
+else()
     message(FATAL_ERROR "openmp is required for building the application")
 endif()
 
