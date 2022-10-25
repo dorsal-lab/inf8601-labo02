@@ -52,7 +52,7 @@ include(FindOpenMP)
 if(OpenMP_C_FOUND)
     target_link_libraries(sinoscope ${OpenMP_C_LIBRARIES})
     target_link_libraries(sinoscope-nocl ${OpenMP_C_LIBRARIES})
-else()
+else()p
     message(FATAL_ERROR "openmp is required for building the application")
 endif()
 
@@ -77,6 +77,10 @@ else()
   endif()
 
   add_definitions(-DWITH_VIEWER)
+  target_sources(sinoscope PUBLIC
+      source/viewer.c
+  )
+
   include(FindOpenGL)
   if(OPENGL_FOUND)
       if(NOT OPENGL_GLU_FOUND)

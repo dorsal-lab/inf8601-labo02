@@ -318,7 +318,7 @@ int viewer_open() {
     glutReshapeFunc(callback_reshape);
 
     glewInit();
-    glXSwapIntervalMESA(0);
+    glXSwapIntervalSGI(0);
     glutMainLoop();
 
     return 0;
