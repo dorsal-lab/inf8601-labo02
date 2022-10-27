@@ -15,7 +15,7 @@ using namespace clang::ast_matchers;
 // AST matchers
 
 clang::ast_matchers::DeclarationMatcher kernelMatcher =
-    functionDecl(hasName("sinoscope_kernel")).bind("kernelDecl");
+    functionDecl().bind("kernelDecl");
 
 inline void assertB(bool cond, const std::string& mess) {
     if (!cond) {
@@ -52,13 +52,13 @@ void KernelCallback::assertVariant(const OclImpl& requirements) const {
 
     case OclParam::IntStructFloatOneByOne:
         assertB(std::all_of(args.cbegin() + 2, args.cend(),
-                            [](ArgType p) { return p == ArgType::Integral; }) &&
+                            [](ArgType p) { return p == ArgType::Floating; }) &&
                     args[1] == ArgType::Aggregate,
                 "les entiers doivent être passés en struct et les flottants un "
                 "par un");
     case OclParam::FloatStructIntOneByOne:
         assertB(std::all_of(args.cbegin() + 2, args.cend(),
-                            [](ArgType p) { return p == ArgType::Floating; }) &&
+                            [](ArgType p) { return p == ArgType::Integral; }) &&
                     args[1] == ArgType::Aggregate,
                 "les flottants doivent être passés en struct et les entiers un "
                 "par un");
@@ -71,22 +71,31 @@ void KernelCallback::run(
             result.Nodes.getNodeAs<FunctionDecl>("kernelDecl")) {
         // match->dump();
 
-        has_matched = true;
+        bool is_kernel = false;
+        for (auto attr : match->attrs()) {
 
-        for (auto* parameter : match->parameters()) {
-            // parameter->dump();
-            auto type = parameter->getOriginalType();
+            if (attr->getParsedKind() == clang::Attr::AT_OpenCLKernel) {
+                is_kernel = true;
+                has_matched = true;
+            }
+        }
 
-            if (type->isFloatingType()) {
-                args.push_back(ArgType::Floating);
-            } else if (type->isIntegralType(*result.Context)) {
-                args.push_back(ArgType::Integral);
-            } else if (type->isAggregateType()) {
-                args.push_back(ArgType::Aggregate);
-            } else if (type->isPointerType()) {
-                args.push_back(ArgType::Pointer);
-            } else {
-                throw std::runtime_error("Unhandled type");
+        if (is_kernel) {
+            for (auto* parameter : match->parameters()) {
+                // parameter->dump();
+                auto type = parameter->getOriginalType();
+
+                if (type->isFloatingType()) {
+                    args.push_back(ArgType::Floating);
+                } else if (type->isIntegralType(*result.Context)) {
+                    args.push_back(ArgType::Integral);
+                } else if (type->isAggregateType()) {
+                    args.push_back(ArgType::Aggregate);
+                } else if (type->isPointerType()) {
+                    args.push_back(ArgType::Pointer);
+                } else {
+                    throw std::runtime_error("Unhandled type");
+                }
             }
         }
     }
