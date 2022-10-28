@@ -46,22 +46,25 @@ void KernelCallback::assertVariant(const OclImpl& requirements) const {
                                        p == ArgType::Integral;
                             }),
                 "tous les arguments doivent être passés un à un");
+        break;
     case OclParam::Struct:
         assertB(args[1] == ArgType::Aggregate,
                 "tous les arguments doivent être passés dans une struct");
-
+        break;
     case OclParam::IntStructFloatOneByOne:
         assertB(std::all_of(args.cbegin() + 2, args.cend(),
                             [](ArgType p) { return p == ArgType::Floating; }) &&
                     args[1] == ArgType::Aggregate,
                 "les entiers doivent être passés en struct et les flottants un "
                 "par un");
+        break;
     case OclParam::FloatStructIntOneByOne:
         assertB(std::all_of(args.cbegin() + 2, args.cend(),
                             [](ArgType p) { return p == ArgType::Integral; }) &&
                     args[1] == ArgType::Aggregate,
                 "les flottants doivent être passés en struct et les entiers un "
                 "par un");
+        break;
     }
 }
 
